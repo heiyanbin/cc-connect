@@ -1,31 +1,34 @@
 import api from './client';
 
 export interface LastMessage {
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-}
-
-export interface Session {
-  id: string;
-  name?: string;
-  created_at: string;
-  updated_at?: string;
-  last_message?: LastMessage | null;
-  live?: boolean;
-}
-
-export interface SessionsResponse {
-  sessions: Session[];
-}
-
-export interface HistoryEntry {
-  role: 'user' | 'assistant';
+  role: string;
   content: string;
   timestamp: string;
 }
 
-export interface HistoryResponse {
-  history: HistoryEntry[];
+export interface Session {
+  id: string;
+  session_key: string;
+  name: string;
+  platform: string;
+  agent_type: string;
+  active: boolean;
+  live: boolean;
+  created_at: string;
+  updated_at: string;
+  history_count: number;
+  last_message: LastMessage | null;
+  user_name?: string;
+  chat_name?: string;
+}
+
+export interface SessionDetail extends Session {
+  agent_session_id: string;
+  history: { role: string; content: string; timestamp: string }[];
+}
+
+export interface SessionsResponse {
+  sessions: Session[];
 }
 
 export interface SendMessageRequest {
@@ -41,9 +44,9 @@ export interface SendMessageResponse {
 export const listSessions = (project: string): Promise<SessionsResponse> =>
   api.get<SessionsResponse>(`/projects/${project}/sessions`);
 
-// Get session history
-export const getSessionHistory = (project: string, sessionId: string): Promise<HistoryResponse> =>
-  api.get<HistoryResponse>(`/projects/${project}/sessions/${sessionId}/history`);
+// Get session detail with history
+export const getSession = (project: string, sessionId: string, historyLimit?: number): Promise<SessionDetail> =>
+  api.get<SessionDetail>(`/projects/${project}/sessions/${sessionId}`, historyLimit ? { history_limit: String(historyLimit) } : undefined);
 
 // Send a message
 export const sendMessage = (project: string, body: SendMessageRequest): Promise<SendMessageResponse> =>

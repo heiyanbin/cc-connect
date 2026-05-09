@@ -34,8 +34,9 @@ class ApiClient {
     return res.json();
   }
 
-  get<T>(path: string): Promise<T> {
-    return this.request<T>('GET', path);
+  get<T>(path: string, params?: Record<string, string>): Promise<T> {
+    const url = params ? `${path}?${new URLSearchParams(params)}` : path;
+    return this.request<T>('GET', url);
   }
 
   post<T>(path: string, body?: unknown): Promise<T> {
