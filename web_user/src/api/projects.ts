@@ -3,8 +3,8 @@ import api from './client';
 export interface ProjectSummary {
   name: string;
   agent_type: string;
-  platforms?: string[];
-  sessions_count?: number;
+  platforms: string[];
+  sessions_count: number;
 }
 
 export interface ProjectsResponse {
