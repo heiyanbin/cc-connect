@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Bot, ArrowRight } from 'lucide-react';
-import { Card, Badge, EmptyState } from '@/components/ui';
+import { Card, EmptyState } from '@/components/ui';
 import { listProjects, type ProjectSummary } from '@/api/projects';
 import { PUBLIC_PROJECT_PATTERN } from '@/lib/constants';
 import { displayAgentName } from '@/lib/utils';
@@ -69,11 +69,6 @@ export default function AgentList() {
                   <h3 className="font-semibold">{displayAgentName(agent.name)}</h3>
                 </div>
                 <ArrowRight size={16} className="text-gray-400" />
-              </div>
-
-              <div className="flex items-center gap-2 mb-3">
-                <Badge>{agent.agent_type}</Badge>
-                {agent.platforms?.slice(0, 2).map(p => <Badge key={p}>{p}</Badge>)}
               </div>
 
               <p className="text-xs text-gray-500">
