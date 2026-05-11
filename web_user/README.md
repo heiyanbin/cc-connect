@@ -8,6 +8,17 @@ User-facing web frontend for connecting WeChat to Agents and chatting.
 - Scan QR code to bind WeChat account to an Agent
 - Chat via web browser (session shared with WeChat app)
 
+## Configuration
+
+Create a `.env` file with your management token (from `config.toml`):
+
+```
+VITE_API_BASE_URL=/api/v1
+VITE_MANAGEMENT_TOKEN=your-management-secret
+```
+
+The management token is required to authenticate with the Management API.
+
 ## Development
 
 ```bash

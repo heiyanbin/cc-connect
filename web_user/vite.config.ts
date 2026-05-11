@@ -16,6 +16,11 @@ export default defineConfig({
         target: 'http://localhost:9820',
         changeOrigin: true,
       },
+      '/bridge/ws': {
+        target: 'http://localhost:9810',
+        ws: true,
+        changeOrigin: true,
+      },
     },
   },
 });

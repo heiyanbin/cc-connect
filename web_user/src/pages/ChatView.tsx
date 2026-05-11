@@ -1,20 +1,43 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Circle, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ChatInput } from '@/components/ui/ChatInput';
 import { MessageBubble } from '@/components/ui/MessageBubble';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { listSessions, getSession, sendMessage } from '@/api/sessions';
+import { listSessions, getSession } from '@/api/sessions';
 import { getSessionKey } from '@/hooks/useSessionKey';
 import { displayAgentName } from '@/lib/utils';
 import { timeAgo } from '@/lib/utils';
+import { useBridgeSocket, fetchBridgeConfig, type BridgeConfig, type BridgeIncoming, type BridgeStatus } from '@/hooks/useBridgeSocket';
 
 interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
+}
+
+function StatusBadge({ status }: { status: BridgeStatus }) {
+  if (status === 'connected') {
+    return (
+      <span className="flex items-center gap-1 text-xs text-emerald-500">
+        <Circle size={6} className="fill-current" /> connected
+      </span>
+    );
+  }
+  if (status === 'connecting' || status === 'registering') {
+    return (
+      <span className="flex items-center gap-1 text-xs text-yellow-500">
+        <Loader2 size={10} className="animate-spin" /> connecting...
+      </span>
+    );
+  }
+  return (
+    <span className="flex items-center gap-1 text-xs text-gray-400">
+      <WifiOff size={10} /> disconnected
+    </span>
+  );
 }
 
 export default function ChatView() {
@@ -24,19 +47,33 @@ export default function ChatView() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [sessionKey, setSessionKeyState] = useState<string | null>(null);
+  const [bridgeCfg, setBridgeCfg] = useState<BridgeConfig | null>(null);
+  const [typing, setTyping] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Load session key and bridge config
   useEffect(() => {
     if (!name) return;
     const sk = getSessionKey(name);
     setSessionKeyState(sk);
-    if (sk) {
-      loadHistory(sk);
-    } else {
-      setLoading(false);
-    }
+    fetchBridgeConfig().then(setBridgeCfg);
   }, [name]);
 
-  async function loadHistory(_sk: string) {
+  // Load history when sessionKey changes
+  useEffect(() => {
+    if (!sessionKey || !name) {
+      setLoading(false);
+      return;
+    }
+    loadHistory();
+  }, [sessionKey, name]);
+
+  // Scroll to bottom on new messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, typing]);
+
+  async function loadHistory() {
     setLoading(true);
     setError('');
     try {
@@ -52,7 +89,7 @@ export default function ChatView() {
 
       const detail = await getSession(name!, session.id);
       const chatMessages: ChatMessage[] = detail.history.map((h, i) => ({
-        id: `${i}`,
+        id: `hist-${i}`,
         role: h.role as 'user' | 'assistant',
         content: h.content,
         timestamp: h.timestamp,
@@ -65,13 +102,66 @@ export default function ChatView() {
     }
   }
 
+  // Handle incoming WebSocket messages
+  const handleBridgeMessage = useCallback((msg: BridgeIncoming) => {
+    if (msg.type === 'reply') {
+      setMessages(prev => [...prev, {
+        id: `reply-${Date.now()}`,
+        role: 'assistant',
+        content: msg.content,
+        timestamp: new Date().toISOString(),
+      }]);
+      setTyping(false);
+      setSending(false);
+    } else if (msg.type === 'reply_stream') {
+      const stream = msg as Extract<BridgeIncoming, { type: 'reply_stream' }>;
+      if (stream.done) {
+        setMessages(prev => {
+          // Update the last streaming message or add new one
+          const idx = prev.findIndex(m => m.id.startsWith('stream-'));
+          if (idx >= 0) {
+            const updated = [...prev];
+            updated[idx] = { ...updated[idx], content: stream.full_text, timestamp: new Date().toISOString() };
+            return updated;
+          }
+          return [...prev, { id: `reply-${Date.now()}`, role: 'assistant', content: stream.full_text, timestamp: new Date().toISOString() }];
+        });
+        setTyping(false);
+        setSending(false);
+      } else {
+        setMessages(prev => {
+          const idx = prev.findIndex(m => m.id.startsWith('stream-'));
+          if (idx >= 0) {
+            const updated = [...prev];
+            updated[idx] = { ...updated[idx], content: stream.full_text };
+            return updated;
+          }
+          return [...prev, { id: `stream-${Date.now()}`, role: 'assistant', content: stream.full_text, timestamp: new Date().toISOString() }];
+        });
+      }
+    } else if (msg.type === 'typing_start') {
+      setTyping(true);
+    } else if (msg.type === 'typing_stop') {
+      setTyping(false);
+    }
+  }, []);
+
+  // WebSocket connection
+  const { status, sendMessage } = useBridgeSocket({
+    bridgeCfg,
+    platformName: 'web-user',
+    sessionKey: sessionKey || '',
+    projectName: name,
+    onMessage: handleBridgeMessage,
+  });
+
   const handleSend = useCallback(async (message: string) => {
-    if (!sessionKey || !name || sending) return;
+    if (!sessionKey || !name || status !== 'connected') return;
 
     setSending(true);
     setError('');
 
-    // Add user message immediately
+    // Add user message immediately to UI
     const userMsg: ChatMessage = {
       id: `user-${Date.now()}`,
       role: 'user',
@@ -80,16 +170,9 @@ export default function ChatView() {
     };
     setMessages(prev => [...prev, userMsg]);
 
-    try {
-      await sendMessage(name, { session_key: sessionKey, message });
-      // Reload history to get assistant response
-      await loadHistory(sessionKey);
-    } catch (e: any) {
-      setError(e.message || 'Failed to send');
-    } finally {
-      setSending(false);
-    }
-  }, [name, sessionKey, sending]);
+    // Send via WebSocket
+    sendMessage(message);
+  }, [name, sessionKey, status, sendMessage]);
 
   // No sessionKey - redirect to connect
   if (!sessionKey) {
@@ -103,6 +186,8 @@ export default function ChatView() {
     );
   }
 
+  const canSend = status === 'connected';
+
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
@@ -112,8 +197,11 @@ export default function ChatView() {
           <span>Back</span>
         </Link>
         <h1 className="font-semibold">{displayAgentName(name || '')}</h1>
-        <div className="text-xs text-gray-400">
-          {messages.length} messages
+        <div className="flex items-center gap-2">
+          <StatusBadge status={status} />
+          <span className="text-xs text-gray-400">
+            {messages.length} messages
+          </span>
         </div>
       </div>
 
@@ -128,23 +216,51 @@ export default function ChatView() {
         ) : messages.length === 0 ? (
           <EmptyState message="No messages yet. Say something!" />
         ) : (
-          messages.map((msg) => (
-            <MessageBubble
-              key={msg.id}
-              role={msg.role}
-              content={msg.content}
-              timestamp={timeAgo(msg.timestamp)}
-            />
-          ))
+          <>
+            {messages.map((msg) => (
+              <MessageBubble
+                key={msg.id}
+                role={msg.role}
+                content={msg.content}
+                timestamp={timeAgo(msg.timestamp)}
+              />
+            ))}
+            {typing && !messages.some(m => m.id.startsWith('stream-')) && (
+              <div className="flex gap-3 justify-start mb-4">
+                <div className="rounded-2xl px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                  <div className="flex gap-1">
+                    <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </div>
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </>
         )}
       </div>
 
       {/* Input */}
-      <ChatInput
-        onSend={handleSend}
-        disabled={loading}
-        loading={sending}
-      />
+      <div className="border-t border-gray-200 dark:border-gray-700 p-4">
+        {canSend ? (
+          <ChatInput
+            onSend={handleSend}
+            disabled={loading}
+            loading={sending}
+          />
+        ) : !bridgeCfg ? (
+          <div className="flex items-center gap-2 px-4 py-3 text-sm text-amber-500 bg-amber-50 dark:bg-amber-900/20 rounded-xl">
+            <WifiOff size={14} />
+            <span>Bridge not available. Enable [bridge] in config.toml to chat from web.</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 px-4 py-3 text-sm text-gray-400 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+            <Loader2 size={14} className="animate-spin" />
+            <span>Connecting...</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

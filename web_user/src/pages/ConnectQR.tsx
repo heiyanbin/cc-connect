@@ -3,11 +3,12 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { QRDisplay } from '@/components/ui/QRDisplay';
 import { setupWeixinBegin, setupWeixinPoll, setupWeixinSave } from '@/api/setup';
+import { restartSystem } from '@/api/status';
 import { setSessionKey } from '@/hooks/useSessionKey';
 import { displayAgentName } from '@/lib/utils';
 import { sleep } from '@/lib/utils';
 
-type Phase = 'idle' | 'loading' | 'scanning' | 'scanned' | 'confirmed' | 'expired' | 'error' | 'saving' | 'done';
+type Phase = 'idle' | 'loading' | 'scanning' | 'scanned' | 'confirmed' | 'expired' | 'error' | 'saving' | 'restarting' | 'done';
 
 export default function ConnectQR() {
   const { name } = useParams<{ name: string }>();
@@ -57,7 +58,7 @@ export default function ConnectQR() {
             break;
           case 'confirmed':
             setPhase('saving');
-            await setupWeixinSave({
+            const saveRes = await setupWeixinSave({
               project: name!,
               token: res.bot_token!,
               ilink_bot_id: res.ilink_bot_id,
@@ -66,6 +67,19 @@ export default function ConnectQR() {
             // Store sessionKey
             const sessionKey = `weixin:dm:${res.ilink_user_id}`;
             setSessionKey(name!, sessionKey);
+
+            // Restart backend if required
+            if (saveRes.restart_required) {
+              setPhase('restarting');
+              try {
+                await restartSystem();
+                await sleep(2000); // Wait for backend to restart
+              } catch (e) {
+                // Restart may fail if backend already stopped, continue anyway
+                console.log('Restart error (may be expected):', e);
+              }
+            }
+
             setPhase('done');
             // Redirect to chat after short delay
             setTimeout(() => navigate(`/chat/${name}`), 500);
@@ -109,7 +123,7 @@ export default function ConnectQR() {
           qrUrl={qrUrl}
           status={
             phase === 'done' ? 'confirmed' :
-            phase === 'saving' ? 'scanned' :
+            phase === 'saving' || phase === 'restarting' ? 'scanned' :
             phase === 'idle' ? 'loading' :
             phase
           }
@@ -117,6 +131,9 @@ export default function ConnectQR() {
           onRetry={handleRetry}
         />
 
+        {phase === 'restarting' && (
+          <p className="mt-4 text-amber-500">Restarting backend...</p>
+        )}
         {phase === 'done' && (
           <p className="mt-4 text-emerald-500">Redirecting to chat...</p>
         )}
