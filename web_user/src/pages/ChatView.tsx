@@ -208,7 +208,7 @@ export default function ChatView() {
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
-      <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center justify-between">
+      <div className="sticky top-0 p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center justify-between z-10">
         <Link to="/" className="flex items-center gap-2 text-gray-500 hover:text-gray-700">
           <ArrowLeft size={16} />
           <span>Back</span>
