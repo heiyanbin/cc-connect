@@ -1,15 +1,14 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Loader2, Circle, WifiOff } from 'lucide-react';
+import { ArrowLeft, Loader2, Circle, WifiOff, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ChatInput } from '@/components/ui/ChatInput';
 import { MessageBubble } from '@/components/ui/MessageBubble';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { listSessions, getSession } from '@/api/sessions';
-import { getSessionKey } from '@/hooks/useSessionKey';
+import { listSessions, getSession, type Session } from '@/api/sessions';
+import { useBridgeSocket, fetchBridgeConfig, type BridgeConfig, type BridgeIncoming, type BridgeStatus } from '@/hooks/useBridgeSocket';
 import { displayAgentName } from '@/lib/utils';
 import { timeAgo } from '@/lib/utils';
-import { useBridgeSocket, fetchBridgeConfig, type BridgeConfig, type BridgeIncoming, type BridgeStatus } from '@/hooks/useBridgeSocket';
 
 interface ChatMessage {
   id: string;
@@ -46,48 +45,59 @@ export default function ChatView() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
-  const [sessionKey, setSessionKeyState] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [bridgeCfg, setBridgeCfg] = useState<BridgeConfig | null>(null);
   const [typing, setTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Load session key and bridge config
+  // Load sessions and bridge config on mount
   useEffect(() => {
     if (!name) return;
-    const sk = getSessionKey(name);
-    setSessionKeyState(sk);
+    loadSessions();
     fetchBridgeConfig().then(setBridgeCfg);
   }, [name]);
 
-  // Load history when sessionKey changes
+  // Load history when session changes
   useEffect(() => {
-    if (!sessionKey || !name) {
+    if (!currentSessionId || !name) {
       setLoading(false);
       return;
     }
     loadHistory();
-  }, [sessionKey, name]);
+  }, [currentSessionId, name]);
 
   // Scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, typing]);
 
-  async function loadHistory() {
+  async function loadSessions() {
     setLoading(true);
     setError('');
     try {
-      const { sessions } = await listSessions(name!);
-      if (sessions.length === 0) {
-        setLoading(false);
-        return;
+      const { sessions: sessionList } = await listSessions(name!);
+      setSessions(sessionList);
+      if (sessionList.length > 0) {
+        // Select most recent session by default
+        const mostRecent = sessionList.sort((a, b) =>
+          (b.updated_at || b.created_at).localeCompare(a.updated_at || a.created_at)
+        )[0];
+        setCurrentSessionId(mostRecent.id);
       }
-      // Use most recent session
-      const session = sessions.sort((a, b) =>
-        (b.updated_at || b.created_at).localeCompare(a.updated_at || a.created_at)
-      )[0];
+    } catch (e: any) {
+      setError(e.message || 'Failed to load sessions');
+    } finally {
+      setLoading(false);
+    }
+  }
 
-      const detail = await getSession(name!, session.id);
+  async function loadHistory() {
+    if (!currentSessionId) return;
+    setLoading(true);
+    setError('');
+    try {
+      const detail = await getSession(name!, currentSessionId);
       const chatMessages: ChatMessage[] = detail.history.map((h, i) => ({
         id: `hist-${i}`,
         role: h.role as 'user' | 'assistant',
@@ -101,6 +111,10 @@ export default function ChatView() {
       setLoading(false);
     }
   }
+
+  // Get current session and its session_key
+  const currentSession = sessions.find(s => s.id === currentSessionId);
+  const sessionKey = currentSession?.session_key || '';
 
   // Handle incoming WebSocket messages
   const handleBridgeMessage = useCallback((msg: BridgeIncoming) => {
@@ -117,7 +131,6 @@ export default function ChatView() {
       const stream = msg as Extract<BridgeIncoming, { type: 'reply_stream' }>;
       if (stream.done) {
         setMessages(prev => {
-          // Update the last streaming message or add new one
           const idx = prev.findIndex(m => m.id.startsWith('stream-'));
           if (idx >= 0) {
             const updated = [...prev];
@@ -150,7 +163,7 @@ export default function ChatView() {
   const { status, sendMessage } = useBridgeSocket({
     bridgeCfg,
     platformName: 'web-user',
-    sessionKey: sessionKey || '',
+    sessionKey,
     projectName: name,
     onMessage: handleBridgeMessage,
   });
@@ -174,11 +187,15 @@ export default function ChatView() {
     sendMessage(message);
   }, [name, sessionKey, status, sendMessage]);
 
-  // No sessionKey - redirect to connect
-  if (!sessionKey) {
+  const handleSessionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setCurrentSessionId(e.target.value);
+  };
+
+  // No sessions - show connect button
+  if (!loading && sessions.length === 0) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-8">
-        <EmptyState message="Not connected. Please scan QR first." />
+        <EmptyState message="No sessions. Please scan QR first." />
         <Link to={`/connect/${name}`}>
           <Button>Connect</Button>
         </Link>
@@ -186,7 +203,7 @@ export default function ChatView() {
     );
   }
 
-  const canSend = status === 'connected';
+  const canSend = status === 'connected' && sessionKey;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -196,7 +213,26 @@ export default function ChatView() {
           <ArrowLeft size={16} />
           <span>Back</span>
         </Link>
-        <h1 className="font-semibold">{displayAgentName(name || '')}</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="font-semibold">{displayAgentName(name || '')}</h1>
+          {/* Session selector */}
+          {sessions.length > 0 && (
+            <div className="relative">
+              <select
+                value={currentSessionId || ''}
+                onChange={handleSessionChange}
+                className="appearance-none text-xs bg-gray-100 dark:bg-gray-700 rounded-lg px-3 py-1.5 pr-6 cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent/50"
+              >
+                {sessions.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.user_name || s.name || s.id.slice(0, 8)}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            </div>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           <StatusBadge status={status} />
           <span className="text-xs text-gray-400">
@@ -253,6 +289,11 @@ export default function ChatView() {
           <div className="flex items-center gap-2 px-4 py-3 text-sm text-amber-500 bg-amber-50 dark:bg-amber-900/20 rounded-xl">
             <WifiOff size={14} />
             <span>Bridge not available. Enable [bridge] in config.toml to chat from web.</span>
+          </div>
+        ) : !sessionKey ? (
+          <div className="flex items-center gap-2 px-4 py-3 text-sm text-amber-500 bg-amber-50 dark:bg-amber-900/20 rounded-xl">
+            <WifiOff size={14} />
+            <span>No session selected. Choose a session from the dropdown above.</span>
           </div>
         ) : (
           <div className="flex items-center gap-2 px-4 py-3 text-sm text-gray-400 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
