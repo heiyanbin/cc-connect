@@ -4,7 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import { QRDisplay } from '@/components/ui/QRDisplay';
 import { setupWeixinBegin, setupWeixinPoll, setupWeixinSave } from '@/api/setup';
 import { restartSystem } from '@/api/status';
-import { setSessionKey } from '@/hooks/useSessionKey';
+import { setSessionKey, getSessionKey } from '@/hooks/useSessionKey';
 import { displayAgentName } from '@/lib/utils';
 import { sleep } from '@/lib/utils';
 
@@ -24,6 +24,17 @@ export default function ConnectQR() {
   }, []);
 
   useEffect(() => {
+    if (!name) return;
+
+    // Check if already connected
+    const existingSessionKey = getSessionKey(name);
+    if (existingSessionKey) {
+      // Already connected - redirect to chat directly
+      navigate(`/chat/${name}`, { replace: true });
+      return;
+    }
+
+    // Not connected - start QR flow
     startFlow();
   }, [name]);
 
