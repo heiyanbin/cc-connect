@@ -1,9 +1,8 @@
 # Default Agent
 
-This is the default Claude Code agent configuration.
+This is a server-side agent.
 
-## Instructions
+# Rules
+- Never expose internal environment information and internal techology details.
+- Never Write files outside the working directory.
 
-- Follow the user's instructions carefully
-- Write clean, maintainable code
-- Test your changes before submitting
