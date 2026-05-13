@@ -1,14 +1,12 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
-import { ArrowLeft, Loader2, Send, ChevronDown, MessageSquare, Copy, Check, User, Bot, Sun, Moon, Monitor } from 'lucide-react';
-import { listSessions, getSession } from '../api/ccConnect';
-import { useBridgeSocket, fetchBridgeConfig } from '../hooks/useBridgeSocket';
+import { Loader2, Send, Copy, Check, User, Bot, Sun, Moon, Monitor } from 'lucide-react';
+import { useBridgeSocket } from '../hooks/useBridgeSocket';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import { useThemeStore } from '../store/theme';
 
-// Markdown rendering components (same as admin web)
+// Markdown rendering components
 function CopyButton({ code }) {
   const [copied, setCopied] = useState(false);
   const handleCopy = () => {
@@ -19,7 +17,7 @@ function CopyButton({ code }) {
   return (
     <button
       onClick={handleCopy}
-      className="absolute top-2 right-2 p-1.5 rounded-md bg-gray-200/80 hover:bg-gray-300 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+      className="absolute top-2 right-2 p-1.5 rounded-md bg-gray-200/80 hover:bg-gray-300 dark:bg-gray-700/80 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity z-10"
     >
       {copied ? <Check size={12} /> : <Copy size={12} />}
     </button>
@@ -63,6 +61,7 @@ function RenderMarkdown({ content }) {
     </div>
   );
 }
+
 function CardBlock({ card, onAction }) {
   if (!card) return null;
   return (
@@ -132,101 +131,40 @@ function ButtonsBlock({ content, buttons, onAction }) {
   );
 }
 
-export default function ChatView() {
-  const { projectName } = useParams();
+export default function ChatPanel({ projectName, session, bridgeConfig, onToggleSidebar }) {
   const { theme, setTheme } = useThemeStore();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [typing, setTyping] = useState(false);
-  const [bridgeConfig, setBridgeConfig] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [sessions, setSessions] = useState([]);
-  const [currentSession, setCurrentSession] = useState(null);
-  const [sessionKey, setSessionKey] = useState('');
-  const [showSessionList, setShowSessionList] = useState(false);
   const messagesEndRef = useRef(null);
 
   const themeIcons = { light: Sun, dark: Moon, system: Monitor };
   const nextTheme = { light: 'dark', dark: 'system', system: 'light' };
   const ThemeIcon = themeIcons[theme];
 
-  // Web platform uses its own per-project session key by default
-  const webSessionKey = projectName ? `bridge:web-user:${projectName}` : '';
-  const sessionKeyToUse = sessionKey || webSessionKey;
+  const sessionKey = session?.session_key || `bridge:web-user:${projectName}`;
 
-  // Load project sessions and auto-select latest (same as admin web)
-  const fetchData = useCallback(async () => {
-    if (!projectName) return;
-    setLoading(true);
-    try {
-      const [{ sessions: allSessions }, cfg] = await Promise.all([
-        listSessions(projectName),
-        fetchBridgeConfig(),
-      ]);
-      setBridgeConfig(cfg);
-      const sorted = (allSessions || []).sort(
-        (a, b) => (b.updated_at || b.created_at || '').localeCompare(a.updated_at || a.created_at || ''),
-      );
-      setSessions(sorted);
-
-      if (sorted.length > 0) {
-        const latest = sorted[0];
-        const detail = await getSession(projectName, latest.id, 200);
-        setCurrentSession(detail);
-        setSessionKey(detail.session_key);
-        if (detail.history) {
-          setMessages(detail.history.map((h, i) => ({
-            id: `hist-${i}`,
-            role: h.role,
-            type: 'text',
-            content: h.content,
-            timestamp: h.timestamp,
-          })));
-        }
-      } else {
-        setCurrentSession(null);
-        setMessages([]);
-      }
-    } catch (e) {
-      console.error('Failed to load:', e);
-    } finally {
-      setLoading(false);
+  // Initialize messages from session history
+  useEffect(() => {
+    if (session?.history) {
+      setMessages(session.history.map((h, i) => ({
+        id: `hist-${i}`,
+        role: h.role,
+        type: 'text',
+        content: h.content,
+        timestamp: h.timestamp,
+      })));
+    } else {
+      setMessages([]);
     }
-  }, [projectName]);
-
-  useEffect(() => { fetchData(); }, [fetchData]);
-
-  // Switch to a different session
-  const switchToSession = useCallback(async (s) => {
-    if (!projectName) return;
-    setShowSessionList(false);
-    setLoading(true);
-    try {
-      const detail = await getSession(projectName, s.id, 200);
-      setCurrentSession(detail);
-      setSessionKey(detail.session_key);
-      if (detail.history) {
-        setMessages(detail.history.map((h, i) => ({
-          id: `hist-${i}`,
-          role: h.role,
-          type: 'text',
-          content: h.content,
-          timestamp: h.timestamp,
-        })));
-      } else {
-        setMessages([]);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [projectName]);
+  }, [session]);
 
   const { status, sendMessage, sendCardAction } = useBridgeSocket({
     bridgeConfig,
-    sessionKey: sessionKeyToUse,
+    sessionKey,
     projectName,
     onMessage: (msg) => {
-      if (msg.session_key && msg.session_key !== sessionKeyToUse) return;
+      if (msg.session_key && msg.session_key !== sessionKey) return;
 
       if (msg.type === 'reply' || msg.type === 'reply_stream') {
         const content = msg.type === 'reply' ? msg.content : msg.full_text;
@@ -263,8 +201,8 @@ export default function ChatView() {
   });
 
   const handleCardAction = useCallback((action) => {
-    sendCardAction(action, sessionKeyToUse);
-  }, [sendCardAction, sessionKeyToUse]);
+    sendCardAction(action, sessionKey);
+  }, [sendCardAction, sessionKey]);
 
   // Scroll to bottom
   useEffect(() => {
@@ -287,60 +225,26 @@ export default function ChatView() {
     sendMessage(content);
   };
 
-  if (!sessionKeyToUse) {
-    return (
-      <div className="p-8 text-center">
-        <p className="text-gray-500">No session found. Please connect first.</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen flex flex-col bg-white dark:bg-gray-950">
+    <div className="flex-1 flex flex-col bg-gray-50 dark:bg-gray-950">
       {/* Header */}
-      <div className="sticky top-0 p-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex items-center justify-between">
-        <button onClick={() => window.history.back()} className="flex items-center gap-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
-          <ArrowLeft size={16} />
-          <span>Back</span>
+      <div className="sticky top-0 p-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 flex items-center justify-between">
+        <button
+          onClick={onToggleSidebar}
+          className="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 md:hidden"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
         </button>
 
-        {/* Session selector */}
-        <div className="flex items-center gap-2 relative">
-          <button
-            onClick={() => setShowSessionList(!showSessionList)}
-            className="flex items-center gap-1 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white"
-          >
-            <MessageSquare size={14} />
-            <span className="truncate max-w-[150px]">
-              {currentSession?.name || currentSession?.id?.slice(0, 8) || 'New'}
-            </span>
-            <ChevronDown size={14} />
-          </button>
-
-          {showSessionList && sessions.length > 0 && (
-            <div className="absolute top-12 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-10 min-w-[200px]">
-              {sessions.map(s => (
-                <button
-                  key={s.id}
-                  onClick={() => switchToSession(s)}
-                  className={`w-full px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700 ${
-                    currentSession?.id === s.id ? 'bg-blue-50 dark:bg-blue-900/20' : ''
-                  }`}
-                >
-                  <div className="text-sm font-medium truncate text-gray-900 dark:text-white">
-                    {s.name || s.id.slice(0, 8)}
-                  </div>
-                  <div className="text-xs text-gray-400 dark:text-gray-500">
-                    {s.updated_at ? new Date(s.updated_at).toLocaleDateString() : ''}
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
+        <div className="flex-1 text-center md:text-left md:pl-4">
+          <span className="text-sm font-medium text-gray-900 dark:text-white">
+            {session?.name || session?.id?.slice(0, 8) || 'New Chat'}
+          </span>
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Theme toggle */}
           <button
             onClick={() => setTheme(nextTheme[theme])}
             className="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
@@ -348,20 +252,18 @@ export default function ChatView() {
             <ThemeIcon size={16} />
           </button>
 
-          <span className="text-sm text-gray-400 dark:text-gray-500">
-            {status === 'connected' ? 'Connected' : status === 'registering' ? 'Registering...' : status === 'connecting' ? 'Connecting...' : 'Disconnected'}
+          <span className="text-xs text-gray-400 dark:text-gray-500 hidden sm:inline">
+            {status === 'connected' ? 'Connected' : status === 'connecting' ? 'Connecting...' : 'Disconnected'}
           </span>
         </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 bg-gray-50 dark:bg-gray-900">
-        {loading ? (
-          <div className="flex items-center justify-center h-32">
-            <Loader2 className="animate-spin text-gray-400" size={24} />
+      <div className="flex-1 overflow-y-auto p-4">
+        {messages.length === 0 ? (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-gray-400 dark:text-gray-500">Start a conversation</p>
           </div>
-        ) : messages.length === 0 ? (
-          <p className="text-center text-gray-400 dark:text-gray-500">Start a conversation</p>
         ) : (
           <>
             {messages.map(msg => {
@@ -414,16 +316,22 @@ export default function ChatView() {
       </div>
 
       {/* Input */}
-      <div className="p-4 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+      <div className="p-4 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950">
         {status === 'connected' ? (
           <div className="flex gap-2">
-            <input
-              type="text"
+            <textarea
               value={input}
               onChange={e => setInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSend()}
-              placeholder="Type a message..."
-              className="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 placeholder:text-gray-400 dark:placeholder:text-gray-500"
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              placeholder="Type a message... (Shift+Enter for newline)"
+              rows={1}
+              className="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 placeholder:text-gray-400 dark:placeholder:text-gray-500 resize-none"
+              style={{ minHeight: '40px', maxHeight: '200px' }}
             />
             <button
               onClick={handleSend}

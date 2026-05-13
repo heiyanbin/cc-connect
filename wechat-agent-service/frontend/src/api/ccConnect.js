@@ -10,3 +10,6 @@ export const listSessions = (project) => api.get(`/cc-connect/projects/${project
 
 export const getSession = (project, id, historyLimit = 200) =>
   api.get(`/cc-connect/projects/${project}/sessions/${id}`, { history_limit: String(historyLimit) });
+
+export const createSession = (project, sessionKey, name = 'default') =>
+  api.post('/cc-connect/sessions', { project, session_key: sessionKey, name });

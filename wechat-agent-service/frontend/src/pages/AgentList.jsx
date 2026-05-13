@@ -1,15 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Bot, ArrowRight, MessageCircle, Sun, Moon, Monitor } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Bot, ArrowRight, Sun, Moon, Monitor } from 'lucide-react';
 import { listAgents } from '../api/agents';
-import { getUserProjects } from '../api/projects';
 import { useThemeStore } from '../store/theme';
 
 export default function AgentList() {
-  const navigate = useNavigate();
   const { theme, setTheme } = useThemeStore();
   const [agents, setAgents] = useState([]);
-  const [connectedProjects, setConnectedProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -17,11 +14,9 @@ export default function AgentList() {
   const nextTheme = { light: 'dark', dark: 'system', system: 'light' };
   const ThemeIcon = themeIcons[theme];
 
-  const savedUserId = localStorage.getItem('wechat_agent_user_id');
-
   useEffect(() => {
     loadData();
-  }, [savedUserId]);
+  }, []);
 
   async function loadData() {
     setLoading(true);
@@ -29,20 +24,11 @@ export default function AgentList() {
     try {
       const { agents: list } = await listAgents();
       setAgents(list);
-
-      if (savedUserId) {
-        const { projects } = await getUserProjects(savedUserId);
-        setConnectedProjects(projects || []);
-      }
     } catch (e) {
       setError(e.message || 'Failed to load');
     } finally {
       setLoading(false);
     }
-  }
-
-  function goToChat(project) {
-    navigate(`/chat/${project.name}`);
   }
 
   if (loading) {
@@ -74,33 +60,6 @@ export default function AgentList() {
         </button>
       </div>
 
-      {/* Connected Projects Section */}
-      {connectedProjects.length > 0 && (
-        <div className="mb-8">
-          <h2 className="text-lg font-semibold mb-4 text-gray-700 dark:text-gray-300">Connected Projects</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {connectedProjects.map((project) => (
-              <button
-                key={project.name}
-                onClick={() => goToChat(project)}
-                className="block p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800 hover:border-green-500 dark:hover:border-green-600 hover:shadow-md transition text-left"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <MessageCircle className="text-green-500 dark:text-green-400" size={24} />
-                    <div>
-                      <h3 className="font-semibold text-green-700 dark:text-green-400">{project.name}</h3>
-                      <p className="text-sm text-green-600 dark:text-green-500">Click to chat</p>
-                    </div>
-                  </div>
-                  <ArrowRight className="text-green-400 dark:text-green-500" size={20} />
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Available Agents Section */}
       <h2 className="text-lg font-semibold mb-4 text-gray-700 dark:text-gray-300">Available Agents</h2>
       {agents.length === 0 ? (
@@ -110,7 +69,7 @@ export default function AgentList() {
           {agents.map((agent) => (
             <Link
               key={agent.name}
-              to={`/connect/${agent.name}`}
+              to={`/agent/${agent.name}`}
               className="block p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-400 hover:shadow-md transition"
             >
               <div className="flex items-center justify-between">

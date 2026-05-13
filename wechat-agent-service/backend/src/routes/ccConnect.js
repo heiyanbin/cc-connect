@@ -68,4 +68,18 @@ router.get('/projects/:name/sessions/:id', async (req, res) => {
   }
 });
 
+// Create new session
+router.post('/sessions', async (req, res) => {
+  try {
+    const { project, session_key, name } = req.body;
+    if (!project || !session_key) {
+      return res.status(400).json({ error: 'project and session_key required' });
+    }
+    const result = await ccConnect.createSession(project, session_key, name);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

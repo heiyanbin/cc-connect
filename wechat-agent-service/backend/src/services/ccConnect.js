@@ -95,6 +95,30 @@ async function getSession(name, id, historyLimit = 200) {
   return res.data.data || res.data;
 }
 
+// Create new session - calls BridgeServer on port 9810
+async function createSession(project, sessionKey, name = 'default') {
+  // Get bridge config from status (port and token)
+  const status = await getStatus();
+  if (!status.bridge?.enabled) {
+    throw new Error('Bridge not enabled');
+  }
+  const bridgePort = status.bridge.port || 9810;
+  const bridgeToken = status.bridge.token;
+
+  // Call BridgeServer directly
+  const bridgeApi = axios.create({
+    baseURL: `http://localhost:${bridgePort}`,
+    headers: { Authorization: `Bearer ${bridgeToken}` },
+    timeout: 30000
+  });
+  const res = await bridgeApi.post('/bridge/sessions', {
+    project,
+    session_key: sessionKey,
+    name
+  });
+  return res.data;
+}
+
 // Update project settings
 async function updateProjectSettings(projectName, settings) {
   const res = await api.patch(`/projects/${encodeProjectName(projectName)}`, settings);
@@ -113,5 +137,6 @@ module.exports = {
   listProjects,
   listSessions,
   getSession,
+  createSession,
   updateProjectSettings
 };
