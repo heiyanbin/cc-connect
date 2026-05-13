@@ -8,11 +8,17 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tailwindcss/typography": "^0.5.19",
+    "highlight.js": "^11.11.1",
     "lucide-react": "^0.444.0",
     "qrcode.react": "^4.2.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
-    "react-router-dom": "^6.26.0"
+    "react-markdown": "^10.1.0",
+    "react-router-dom": "^6.26.0",
+    "rehype-highlight": "^7.0.2",
+    "remark-gfm": "^4.0.1",
+    "zustand": "^5.0.13"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.0",

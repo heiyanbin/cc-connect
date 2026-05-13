@@ -114,37 +114,37 @@ export default function ConnectQR() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-white dark:bg-gray-950">
       {/* Header */}
-      <div className="p-4 border-b bg-white">
-        <button onClick={() => navigate('/')} className="flex items-center gap-2 text-gray-500 hover:text-gray-700">
+      <div className="p-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+        <button onClick={() => navigate('/')} className="flex items-center gap-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
           <ArrowLeft size={16} />
           <span>Back</span>
         </button>
       </div>
 
       {/* Content */}
-      <div className="flex-1 flex flex-col items-center justify-center p-8">
-        <h1 className="text-xl font-bold mb-2">Connect to {agentName}</h1>
-        <p className="text-gray-500 mb-8">Scan with WeChat to bind your account</p>
+      <div className="flex-1 flex flex-col items-center justify-center p-8 bg-gray-50 dark:bg-gray-900">
+        <h1 className="text-xl font-bold mb-2 text-gray-900 dark:text-white">Connect to {agentName}</h1>
+        <p className="text-gray-500 dark:text-gray-400 mb-8">Scan with WeChat to bind your account</p>
 
-        <div className="bg-white p-6 rounded-lg border">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700">
           {status === 'loading' && (
             <div className="flex items-center gap-2">
               <Loader2 className="animate-spin text-gray-400" size={24} />
-              <span className="text-gray-500">Generating QR...</span>
+              <span className="text-gray-500 dark:text-gray-400">Generating QR...</span>
             </div>
           )}
 
           {status === 'scanning' && qrUrl && (
             <div className="flex flex-col items-center gap-4">
               <QRCodeSVG value={qrUrl} size={256} level="H" />
-              <p className="text-sm text-gray-400">Scan with WeChat to connect</p>
+              <p className="text-sm text-gray-400 dark:text-gray-500">Scan with WeChat to connect</p>
             </div>
           )}
 
           {status === 'scanned' && (
-            <div className="text-center text-gray-500">
+            <div className="text-center text-gray-500 dark:text-gray-400">
               <p>Scanned! Please confirm on your phone...</p>
             </div>
           )}
@@ -152,7 +152,7 @@ export default function ConnectQR() {
           {status === 'creating' && (
             <div className="flex items-center gap-2">
               <Loader2 className="animate-spin text-gray-400" size={24} />
-              <span className="text-gray-500">Creating project...</span>
+              <span className="text-gray-500 dark:text-gray-400">Creating project...</span>
             </div>
           )}
 
@@ -165,8 +165,8 @@ export default function ConnectQR() {
 
           {status === 'error' && (
             <div className="text-center">
-              <p className="text-red-500">{error}</p>
-              <button onClick={startScan} className="mt-4 text-blue-500 hover:underline">
+              <p className="text-red-500 dark:text-red-400">{error}</p>
+              <button onClick={startScan} className="mt-4 text-blue-500 dark:text-blue-400 hover:underline">
                 Retry
               </button>
             </div>

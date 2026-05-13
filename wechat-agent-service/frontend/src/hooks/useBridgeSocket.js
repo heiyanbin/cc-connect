@@ -26,6 +26,16 @@ export function useBridgeSocket({ bridgeConfig, sessionKey, projectName, onMessa
     });
   }, [send, sessionKey, projectName]);
 
+  const sendCardAction = useCallback((action, replyCtx) => {
+    send({
+      type: 'card_action',
+      session_key: sessionKey,
+      action,
+      reply_ctx: replyCtx || sessionKey,
+      project: projectName || '',
+    });
+  }, [send, sessionKey, projectName]);
+
   useEffect(() => {
     if (!bridgeConfig) return;
 
@@ -96,7 +106,7 @@ export function useBridgeSocket({ bridgeConfig, sessionKey, projectName, onMessa
     };
   }, [bridgeConfig, send]);
 
-  return { status, sendMessage };
+  return { status, sendMessage, sendCardAction };
 }
 
 export async function fetchBridgeConfig() {

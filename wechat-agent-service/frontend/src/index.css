@@ -1,7 +1,61 @@
+@import 'highlight.js/styles/github.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 body {
   font-family: system-ui, sans-serif;
+}
+
+/* Code block styles */
+pre code.hljs {
+  padding: 0;
+  background: transparent;
+}
+
+/* Dark mode highlight.js overrides */
+.dark .hljs {
+  color: #e6edf3;
+}
+.dark .hljs-keyword,
+.dark .hljs-selector-tag {
+  color: #ff7b72;
+}
+.dark .hljs-string,
+.dark .hljs-attr {
+  color: #a5d6ff;
+}
+.dark .hljs-comment,
+.dark .hljs-quote {
+  color: #8b949e;
+  font-style: italic;
+}
+.dark .hljs-number,
+.dark .hljs-literal {
+  color: #79c0ff;
+}
+.dark .hljs-title,
+.dark .hljs-title\.class_,
+.dark .hljs-title\.function_ {
+  color: #d2a8ff;
+}
+.dark .hljs-built_in {
+  color: #ffa657;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.3);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 128, 128, 0.5);
 }
