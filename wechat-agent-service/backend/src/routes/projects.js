@@ -4,6 +4,13 @@ const ccConnect = require('../services/ccConnect');
 
 const router = express.Router();
 
+// Default project settings for new users
+const DEFAULT_PROJECT_SETTINGS = {
+  language: 'zh',
+  show_context_indicator: false,
+  reply_footer: false,
+};
+
 // Create user project
 router.post('/create', async (req, res) => {
   try {
@@ -32,7 +39,12 @@ router.post('/create', async (req, res) => {
     // Restart cc-connect (required for new project to be loaded)
     if (saveResult.restart_required) {
       await ccConnect.restart();
+      // Wait for cc-connect to be ready before applying settings
+      await ccConnect.waitForReady();
     }
+
+    // Apply default project settings
+    await ccConnect.updateProjectSettings(projectName, DEFAULT_PROJECT_SETTINGS);
 
     res.json({
       project_name: projectName,

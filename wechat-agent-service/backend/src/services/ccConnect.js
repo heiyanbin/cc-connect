@@ -7,6 +7,32 @@ const api = axios.create({
   timeout: 30000
 });
 
+// URL encode project name (may contain @ symbol)
+function encodeProjectName(name) {
+  return encodeURIComponent(name);
+}
+
+// Wait for cc-connect to be ready after restart
+function waitForReady(maxRetries = 10, delayMs = 1000) {
+  return new Promise((resolve, reject) => {
+    let retries = 0;
+    const check = async () => {
+      try {
+        await api.get('/status');
+        resolve();
+      } catch (err) {
+        retries++;
+        if (retries >= maxRetries) {
+          reject(new Error('cc-connect not ready after restart'));
+        } else {
+          setTimeout(check, delayMs);
+        }
+      }
+    };
+    check();
+  });
+}
+
 // Setup Weixin begin - generate QR
 async function setupWeixinBegin() {
   const res = await api.post('/setup/weixin/begin');
@@ -45,7 +71,7 @@ async function getStatus() {
 
 // Get project info
 async function getProject(name) {
-  const res = await api.get(`/projects/${name}`);
+  const res = await api.get(`/projects/${encodeProjectName(name)}`);
   return res.data.data || res.data;
 }
 
@@ -57,15 +83,21 @@ async function listProjects() {
 
 // List sessions for a project
 async function listSessions(name) {
-  const res = await api.get(`/projects/${name}/sessions`);
+  const res = await api.get(`/projects/${encodeProjectName(name)}/sessions`);
   return res.data.data || res.data;
 }
 
 // Get session details (with history)
 async function getSession(name, id, historyLimit = 200) {
-  const res = await api.get(`/projects/${name}/sessions/${id}`, {
+  const res = await api.get(`/projects/${encodeProjectName(name)}/sessions/${id}`, {
     params: { history_limit: historyLimit }
   });
+  return res.data.data || res.data;
+}
+
+// Update project settings
+async function updateProjectSettings(projectName, settings) {
+  const res = await api.patch(`/projects/${encodeProjectName(projectName)}`, settings);
   return res.data.data || res.data;
 }
 
@@ -75,9 +107,11 @@ module.exports = {
   setupWeixinSave,
   reload,
   restart,
+  waitForReady,
   getStatus,
   getProject,
   listProjects,
   listSessions,
-  getSession
+  getSession,
+  updateProjectSettings
 };
