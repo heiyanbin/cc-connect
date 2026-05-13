@@ -1,5 +1,5 @@
 {
-  "name": "default",
-  "description": "Default Claude Code assistant",
+  "name": "General Agent",
+  "description": "General agent for office work",
   "version": "1.0"
 }
