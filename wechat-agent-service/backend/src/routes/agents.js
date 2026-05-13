@@ -18,21 +18,4 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Get agent template detail
-router.get('/:name', async (req, res) => {
-  try {
-    const template = await agentTemplate.get(req.params.name);
-    if (!template) {
-      return res.status(404).json({ error: 'Template not found' });
-    }
-    res.json({
-      name: template.name,
-      description: template.description,
-      claude_md_content: template.claude_md_content
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 module.exports = router;
