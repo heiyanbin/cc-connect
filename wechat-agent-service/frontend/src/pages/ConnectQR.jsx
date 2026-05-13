@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, CheckCircle } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { setupWeixinBegin, setupWeixinPoll } from '../api/ccConnect';
-import { createProject } from '../api/projects';
+import { createProject, getUserProjects } from '../api/projects';
 
 export default function ConnectQR() {
   const { agentName } = useParams();
@@ -14,18 +14,36 @@ export default function ConnectQR() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    // Check if already connected to this agent
+    checkExistingConnection();
+  }, [agentName]);
+
+  async function checkExistingConnection() {
     const savedUserId = localStorage.getItem('wechat_agent_user_id');
-    if (savedUserId) {
-      // Check if project exists for this agent
-      const existingProjectName = `${savedUserId}-${agentName}`;
-      // Try to navigate directly - if project doesn't exist, will fallback to scan
-      navigate(`/chat/${existingProjectName}`, { replace: true });
+    if (!savedUserId) {
+      // No existing session, start scan
+      startScan();
       return;
     }
-    // No existing session, start scan
-    startScan();
-  }, [agentName]);
+
+    // Check if project for this specific agent exists
+    const expectedProjectName = `${savedUserId}-${agentName}`;
+    try {
+      const { projects } = await getUserProjects(savedUserId);
+      const existingProject = projects?.find(p => p.name === expectedProjectName);
+
+      if (existingProject) {
+        // Already connected to this agent, go to chat
+        navigate(`/chat/${expectedProjectName}`, { replace: true });
+      } else {
+        // Connected to other agents, but not this one - need to scan
+        startScan();
+      }
+    } catch (e) {
+      // API error - fall back to scan
+      console.error('Check existing connection error:', e);
+      startScan();
+    }
+  }
 
   async function startScan() {
     setStatus('loading');
